@@ -54,13 +54,20 @@ class OuraHeartRate:
         except Exception as e:
             print(f"Error sending email: {e}")
     
-    def get_heart_rate(self, start_date, end_date):
-        """Get heart rate data for a date range"""
+    def get_heart_rate(self, start_datetime, end_datetime):
+        """Get heart rate data for a specific time range"""
         endpoint = f"{self.base_url}/heartrate"
+        
+        # Format times in UTC
         params = {
-            "start_date": start_date,
-            "end_date": end_date
+            "start_datetime": start_datetime.astimezone().isoformat(),
+            "end_datetime": end_datetime.astimezone().isoformat()
         }
+        
+        print(f"\nDebug - API Request:")
+        print(f"Endpoint: {endpoint}")
+        print(f"Start: {params['start_datetime']}")
+        print(f"End: {params['end_datetime']}")
         
         response = requests.get(endpoint, headers=self.headers, params=params)
         if response.status_code == 200:
@@ -130,10 +137,10 @@ def monitor_heart_rate(interval_minutes=5):
     
     try:
         while True:
-            now = datetime.now()
-            # Get data for the last hour
-            start_time = (now - timedelta(hours=1)).strftime('%Y-%m-%d')
-            end_time = now.strftime('%Y-%m-%d')
+            now = datetime.now().astimezone()
+            # Get data for the last 24 hours to ensure we have data
+            start_time = now - timedelta(hours=24)
+            end_time = now
             
             print(f"\n[{now.strftime('%Y-%m-%d %H:%M:%S')}]")
             print("Fetching heart rate data for the last hour...")
