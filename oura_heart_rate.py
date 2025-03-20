@@ -54,24 +54,19 @@ class OuraHeartRate:
         except Exception as e:
             print(f"Error sending email: {e}")
     
-    def check_sync_status(self):
-        """Check if the Oura ring has synced recently"""
-        endpoint = f"{self.base_url}/heartrate"
-        params = {
-            "start_datetime": (datetime.now() - timedelta(minutes=30)).isoformat(),
-            "end_datetime": datetime.now().isoformat()
-        }
-        
-        response = requests.get(endpoint, headers=self.headers, params=params)
-        if response.status_code == 200:
-            data = response.json()
-            if data and 'data' in data and data['data']:
-                latest = max(data['data'], key=lambda x: x['timestamp'])
-                latest_time = datetime.fromisoformat(latest['timestamp'].replace('Z', '+00:00'))
-                time_since_sync = datetime.now().astimezone() - latest_time
-                print(f"\nLast sync: {latest_time.strftime('%Y-%m-%d %H:%M:%S')}")
-                print(f"Time since last sync: {time_since_sync.total_seconds() / 60:.1f} minutes")
-                return time_since_sync.total_seconds() < 1800  # 30 minutes
+    def check_sync_status(self, data):
+        """Check if the Oura ring has synced recently using the provided data"""
+        if data and 'data' in data and data['data']:
+            latest = max(data['data'], key=lambda x: x['timestamp'])
+            latest_time = datetime.fromisoformat(latest['timestamp'].replace('Z', '+00:00'))
+            time_since_sync = datetime.now().astimezone() - latest_time
+            minutes_since_sync = time_since_sync.total_seconds() / 60
+            
+            if minutes_since_sync > 30:  # If no data in last 30 minutes
+                print(f"\n⚠️ Warning: Last sync was {minutes_since_sync:.1f} minutes ago")
+                print("Please sync your Oura ring with the Oura app if this persists.")
+                return False
+            return True
         return False
 
     def get_heart_rate(self, start_datetime, end_datetime):
@@ -165,10 +160,6 @@ def monitor_heart_rate(interval_minutes=5):
         while True:
             now = datetime.now().astimezone()
             
-            # Check sync status
-            if not oura.check_sync_status():
-                print("\n⚠️ Warning: Oura ring hasn't synced recently. Please sync your ring with the Oura app.")
-            
             # Get data for the last hour
             start_time = now - timedelta(hours=1)
             end_time = now
@@ -178,6 +169,8 @@ def monitor_heart_rate(interval_minutes=5):
             
             data = oura.get_heart_rate(start_time, end_time)
             if data and 'data' in data and data['data']:
+                # Check sync status using the actual data
+                oura.check_sync_status(data)
                 # Display recent readings
                 print("\nRecent Heart Rate Readings:")
                 recent_readings = sorted(data['data'][-10:], key=lambda x: x['timestamp'], reverse=True)
