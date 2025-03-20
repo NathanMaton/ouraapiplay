@@ -1,0 +1,4 @@
+requests==2.31.0
+garminconnect==0.2.25
+python-dotenv==1.0.0
+twilio==8.12.0
