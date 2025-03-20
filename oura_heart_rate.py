@@ -54,9 +54,35 @@ class OuraHeartRate:
         except Exception as e:
             print(f"Error sending email: {e}")
     
+    def check_sync_status(self):
+        """Check if the Oura ring has synced recently"""
+        endpoint = f"{self.base_url}/heartrate"
+        params = {
+            "start_datetime": (datetime.now() - timedelta(minutes=30)).isoformat(),
+            "end_datetime": datetime.now().isoformat()
+        }
+        
+        response = requests.get(endpoint, headers=self.headers, params=params)
+        if response.status_code == 200:
+            data = response.json()
+            if data and 'data' in data and data['data']:
+                latest = max(data['data'], key=lambda x: x['timestamp'])
+                latest_time = datetime.fromisoformat(latest['timestamp'].replace('Z', '+00:00'))
+                time_since_sync = datetime.now().astimezone() - latest_time
+                print(f"\nLast sync: {latest_time.strftime('%Y-%m-%d %H:%M:%S')}")
+                print(f"Time since last sync: {time_since_sync.total_seconds() / 60:.1f} minutes")
+                return time_since_sync.total_seconds() < 1800  # 30 minutes
+        return False
+
     def get_heart_rate(self, start_datetime, end_datetime):
         """Get heart rate data for a specific time range"""
         endpoint = f"{self.base_url}/heartrate"
+        
+        # Ensure we're not requesting future data
+        now = datetime.now().astimezone()
+        if end_datetime > now:
+            end_datetime = now
+            start_datetime = end_datetime - timedelta(hours=1)
         
         # Format times in UTC
         params = {
@@ -138,8 +164,13 @@ def monitor_heart_rate(interval_minutes=5):
     try:
         while True:
             now = datetime.now().astimezone()
-            # Get data for the last 24 hours to ensure we have data
-            start_time = now - timedelta(hours=24)
+            
+            # Check sync status
+            if not oura.check_sync_status():
+                print("\n⚠️ Warning: Oura ring hasn't synced recently. Please sync your ring with the Oura app.")
+            
+            # Get data for the last hour
+            start_time = now - timedelta(hours=1)
             end_time = now
             
             print(f"\n[{now.strftime('%Y-%m-%d %H:%M:%S')}]")
